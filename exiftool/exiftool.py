@@ -214,7 +214,7 @@ def find_executable(executable, path=None):
 		path = os.environ['PATH']
 	paths = path.split(os.pathsep)
 	extlist = ['']
-	
+
 	if os.name == 'os2':
 		(base, ext) = os.path.splitext(executable)
 		# executable files on OS/2 can have an arbitrary extension, but
@@ -226,7 +226,7 @@ def find_executable(executable, path=None):
 		(base, ext) = os.path.splitext(executable)
 		if ext.lower() not in pathext:
 			extlist = pathext
-	
+
 	for ext in extlist:
 		execname = executable + ext
 		#print(execname)
@@ -255,6 +255,8 @@ class ExifTool(object):
 	name disables the print conversion for this particular tag.
 
 	You can pass two arguments to the constructor:
+	- ``config_file`` (string): Path to exiftool config file for writing
+	  to custom tags and namespaces.
 	- ``common_args`` (list of strings): contains additional paramaters for
 	  the stay-open instance of exiftool
 	- ``executable`` (string): file name of the ``exiftool`` executable.
@@ -290,7 +292,7 @@ class ExifTool(object):
 	   associated with a running subprocess.
 	"""
 
-	def __init__(self, executable_=None, common_args=None, win_shell=True):
+	def __init__(self, executable_=None, config_file=None, common_args=None, win_shell=True):
 
 		self.win_shell = win_shell
 
@@ -298,16 +300,16 @@ class ExifTool(object):
 			self.executable = DEFAULT_EXECUTABLE
 		else:
 			self.executable = executable_
-		
+
 		# error checking
 		if find_executable(self.executable) is None:
 			raise FileNotFoundError( '"{}" is not found, on path or as absolute path'.format(self.executable) )
-		
+
 		self.running = False
 
+		self.config_file = config_file
 		self._common_args = common_args
 		# it can't be none, check if it's a list, if not, error
-
 		self._process = None
 
 		if common_args is None:
@@ -326,12 +328,12 @@ class ExifTool(object):
 		"""Start an ``exiftool`` process in batch mode for this instance.
 
 		This method will issue a ``UserWarning`` if the subprocess is
-		already running.  The process is by default started with the ``-G`` 
+		already running.  The process is by default started with the ``-G``
 		and ``-n`` (print conversion disabled) as common arguments,
 		which are automatically included in every command you run with
 		:py:meth:`execute()`.
 
-		However, you can override these default arguments with the 
+		However, you can override these default arguments with the
 		``common_args`` parameter in the constructor.
 		"""
 		if self.running:
@@ -339,10 +341,13 @@ class ExifTool(object):
 			return
 
 		proc_args = [self.executable, "-stay_open", "True",  "-@", "-", "-common_args"]
+		if self.config_file:
+			proc_args.insert(1, self.config_file)
+			proc_args.insert(1, '-config')
 		proc_args.extend(self.common_args) # add the common arguments
 
 		logging.debug(proc_args)
-		
+
 		with open(os.devnull, "w") as devnull:
 			try:
 				if sys.platform == 'win32':
@@ -364,7 +369,7 @@ class ExifTool(object):
 						proc_args,
 						stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 						stderr=devnull, preexec_fn=set_pdeathsig(signal.SIGTERM))
-						# Warning: The preexec_fn parameter is not safe to use in the presence of threads in your application. 
+						# Warning: The preexec_fn parameter is not safe to use in the presence of threads in your application.
 						# https://docs.python.org/3/library/subprocess.html#subprocess.Popen
 			except FileNotFoundError as fnfe:
 				raise fnfe
@@ -374,7 +379,7 @@ class ExifTool(object):
 				raise ve
 			except subprocess.CalledProcessError as cpe:
 				raise cpe
-		
+
 		# check error above before saying it's running
 		self.running = True
 
@@ -393,7 +398,7 @@ class ExifTool(object):
 			self._process.kill()
 			outs, errs = proc.communicate()
 			# err handling code from https://docs.python.org/3/library/subprocess.html#subprocess.Popen.communicate
-			
+
 		del self._process
 		self.running = False
 
@@ -428,7 +433,7 @@ class ExifTool(object):
 		"""
 		if not self.running:
 			raise ValueError("ExifTool instance not running.")
-		
+
 		cmd_text = b"\n".join(params + (b"-execute\n",))
 		# cmd_text.encode("utf-8") # a commit put this in the next line, but i can't get it to work TODO
 		# might look at something like this https://stackoverflow.com/questions/7585435/best-way-to-convert-string-to-bytes-in-python-3
